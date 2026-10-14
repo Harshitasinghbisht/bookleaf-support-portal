@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma.js";
+import { classifyTicket } from "../services/aiService.js";
 
 
 const sendError = (res, status, message) =>
@@ -43,62 +44,65 @@ const sendError = (res, status, message) =>
     limit: parsedLimit,
   };
 };
+//important controller to study
+export const createTicket = async (req, res) => {
+  const { subject, description, bookId } = req.body;
+  const userId = req.user.id;
 
-export const createTicket=async(req,res)=>{
-const {subject , description, category, bookId}=req.body;
-const userId=req.user.id;
- if(typeof subject !== "string" ||
-      !subject.trim() ||
-      typeof description !== "string" ||
-      !description.trim()){
-    return sendError(res,400,"Subject and description are required");
- }
-  const validCategories = [
-      "ROYALTY_PAYMENTS",
-      "ISBN_METADATA",
-      "PRINTING_QUALITY",
-      "DISTRIBUTION_AVAILABILITY",
-      "BOOK_STATUS_PRODUCTION",
-      "GENERAL_INQUIRY",
-    ];
+  if (
+    typeof subject !== "string" ||
+    !subject.trim() ||
+    typeof description !== "string" ||
+    !description.trim()
+  ) {
+    return sendError(
+      res,
+      400,
+      "Subject and description are required"
+    );
+  }
 
-    if (!validCategories.includes(category)) {
-      return sendError(res, 400, "Invalid ticket category");
+  if (
+    bookId !== undefined &&
+    (typeof bookId !== "string" || !bookId.trim())
+  ) {
+    return sendError(res, 400, "Invalid bookId");
+  }
+
+  try {
+    const author = await prisma.author.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!author) {
+      return sendError(res, 404, "Author profile not found");
     }
 
-     if (
-      bookId !== undefined &&
-      (typeof bookId !== "string" || !bookId.trim())
-    ) {
-      return sendError(res, 400, "Invalid bookId");
-    }
- try {
-    const author=await prisma.author.findUnique({
-        where:{userId},
-         select: { id: true },
-    })
-    if(!author){
-        return sendError(res,404,"Author profile not found")
-    }
-    if(bookId){
-        const book=await prisma.book.findUnique({
-            where:{id:bookId,
-                authorId:author.id
-            },
-            select: { id: true },
-        })
-        if(!book){
-            return sendError(res,400,"Invalid Book selection");
-        }
+    if (bookId) {
+      const book = await prisma.book.findFirst({
+        where: {
+          id: bookId,
+          authorId: author.id,
+        },
+        select: { id: true },
+      });
+
+      if (!book) {
+        return sendError(res, 400, "Invalid Book selection");
+      }
     }
 
-    const ticket=await prisma.ticket.create({
-        data: {
+    // 1. Create the ticket first with safe defaults.
+    let ticket = await prisma.ticket.create({
+      data: {
         subject: subject.trim(),
         description: description.trim(),
-        category,
+        category: "GENERAL_INQUIRY",
+        priority: "MEDIUM",
         authorId: author.id,
         bookId: bookId || null,
+        aiStatus: "PENDING",
       },
       select: {
         id: true,
@@ -108,19 +112,135 @@ const userId=req.user.id;
         category: true,
         priority: true,
         status: true,
+        aiCategory: true,
+        aiPriority: true,
+        aiPriorityReason: true,
+        aiStatus: true,
         createdAt: true,
       },
-    })
+    });
+
+    // 2. Try classification separately.
+    const startedAt = Date.now();
+    let aiResult;
+
+    try {
+      aiResult = await classifyTicket({
+        subject: ticket.subject,
+        description: ticket.description,
+      });
+    } catch (aiError) {
+      console.error("Ticket classification failed:", aiError.message);
+
+      // The ticket already exists, so preserve it.
+      try {
+        ticket = await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            aiStatus: "FAILED",
+            aiProcessedAt: new Date(),
+          },
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
+            description: true,
+            category: true,
+            priority: true,
+            status: true,
+            aiCategory: true,
+            aiPriority: true,
+            aiPriorityReason: true,
+            aiStatus: true,
+            createdAt: true,
+          },
+        });
+
+        await prisma.aiCall.create({
+          data: {
+            ticketId: ticket.id,
+            kind: "CLASSIFY_PRIORITY",
+            model: "mock-development",
+            latencyMs: Date.now() - startedAt,
+            success: false,
+            errorMessage: aiError.message.slice(0, 500),
+          },
+        });
+      } catch (loggingError) {
+        console.error(
+          "Could not save AI failure details:",
+          loggingError.message
+        );
+      }
+    }
+
+    // 3. Save the suggestions if classification succeeded.
+    if (aiResult) {
+      try {
+        ticket = await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            category: aiResult.category,
+            priority: aiResult.priority,
+            aiCategory: aiResult.category,
+            aiPriority: aiResult.priority,
+            aiPriorityReason: aiResult.reason,
+            aiStatus: "COMPLETED",
+            aiProcessedAt: new Date(),
+          },
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
+            description: true,
+            category: true,
+            priority: true,
+            status: true,
+            aiCategory: true,
+            aiPriority: true,
+            aiPriorityReason: true,
+            aiStatus: true,
+            createdAt: true,
+          },
+        });
+
+        try {
+          await prisma.aiCall.create({
+            data: {
+              ticketId: ticket.id,
+              kind: "CLASSIFY_PRIORITY",
+              model: aiResult.model,
+              latencyMs: Date.now() - startedAt,
+              success: true,
+            },
+          });
+        } catch (loggingError) {
+          console.error(
+            "Could not save AI call log:",
+            loggingError.message
+          );
+        }
+      } catch (updateError) {
+        console.error(
+          "Could not save AI classification:",
+          updateError.message
+        );
+        // The ticket was already created.
+        // Do not turn this into a failed ticket-creation response.
+      }
+    }
+
     return res.status(201).json({
-        success:true,
-        message:"ticket genrated successfully",
-        ticket
-    })
- } catch (error) {
-    console.error("cretae ticket",error)
-    return sendError(res,500,"Internal server error");
- }
-}
+      success: true,
+      message: "Ticket generated successfully",
+      ticket,
+    });
+  } catch (error) {
+    console.error("Create ticket error:", error);
+    return sendError(res, 500, "Internal server error");
+  }
+};
+
 export const getMyTickets=async(req,res)=>{
 const userId=req.user.id;
 try {

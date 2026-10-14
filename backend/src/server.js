@@ -9,6 +9,8 @@ import userRouter from "./routes/auth.routes.js";
 import bookRouter from "./routes/book.routes.js";
 import ticketRouter from "./routes/ticket.routes.js";
 import adminTicketRouter from "./routes/adminTicket.routes.js";
+import adminDashboardRouter from "./routes/adminDashboard.routes.js";
+import authorDashboardRouter from "./routes/authorDashboard.routes.js";
 
 
 dotenv.config();
@@ -30,6 +32,9 @@ app.use("/api/v1/auth",userRouter);
 app.use("/api/v1/books",bookRouter);
 app.use("/api/v1/tickets",ticketRouter);
 app.use("/api/v1/admin",adminTicketRouter);
+app.use("/api/v1/admin",adminDashboardRouter);
+app.use("/api/v1/author",authorDashboardRouter);
+
 
 
 app.use((req, res) => {

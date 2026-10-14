@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma.js";
+import { draftTicketResponse } from "../services/aiService.js";
 
   const parsePagination = (query) => {
   const { page = "1", limit = "10" } = query;
@@ -454,3 +455,91 @@ return res.status(201).json({
     }
 }
 
+export const generateAdminTicketDraft=async(req,res)=>{
+  const {ticketId}=req.params;
+  if(!ticketId){
+    return sendError(res,404,"Ticket id is required");
+  }
+  const startTime = Date.now();
+  try {
+    const ticket = await prisma.ticket.findUnique({
+  where: { id: ticketId },
+  include: {
+    book: {
+      select: {
+        title: true,
+      },
+    },
+  },
+});
+    if(!ticket){
+      return sendError(res,404,"Ticket not found")
+    }
+    if (ticket.status === "RESOLVED" || ticket.status === "CLOSED") {
+      return sendError(
+        res,
+        409,
+        "Cannot generate a draft for a resolved or closed ticket"
+      );
+    }
+
+    const result=await draftTicketResponse({
+      subject: ticket.subject,
+      description: ticket.description,
+      category: ticket.category,
+      priority: ticket.priority,
+       bookTitle: ticket.book?.title ?? null,
+
+    })
+    const draft=await prisma.aiDraft.create({
+      data:{
+         ticketId: ticket.id,
+        content: result.content,
+        model: result.model,
+      },
+       select: {
+        id: true,
+        ticketId: true,
+        content: true,
+        model: true,
+        createdAt: true,
+      },
+    })
+    
+     await prisma.aiCall.create({
+      data: {
+        ticketId: ticket.id,
+        kind: "DRAFT_RESPONSE",
+        model: result.model,
+        latencyMs: Date.now() - startTime,
+        success: true,
+      },
+    });
+    return res.status(201).json({
+      success: true,
+      message: "Response draft generated successfully",
+      data: draft,
+    });
+
+  } catch (error) {
+    console.error("Generate admin ticket draft error:", error);
+
+    try {
+      await prisma.aiCall.create({
+        data: {
+          ticketId,
+          kind: "DRAFT_RESPONSE",
+          model: "mock-development",
+          latencyMs: Date.now() - startTime,
+          success: false,
+          errorMessage: String(error.message || "Draft generation failed")
+            .slice(0, 500),
+        },
+      });
+    } catch (loggingError) {
+      console.error("Failed to log AI draft error:", loggingError);
+    }
+
+    return sendError(res, 503, "Unable to generate a response draft");
+  }
+}
