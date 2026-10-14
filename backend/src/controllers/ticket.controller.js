@@ -1,0 +1,414 @@
+import { prisma } from "../config/prisma.js";
+import { auth } from "../middleware/authenticate.middleware.js";
+
+const sendError = (res, status, message) =>
+  res.status(status).json({
+    success: false,
+    message,
+  });
+
+  const parsePagination = (query) => {
+  const { page = "1", limit = "10" } = query;
+
+  // Accept only positive integer strings
+  if (
+    !/^[1-9]\d*$/.test(page) ||
+    !/^[1-9]\d*$/.test(limit)
+  ) {
+    return {
+      error: "page and limit must be positive integers",
+    };
+  }
+
+  const parsedPage = Number(page);
+  const parsedLimit = Number(limit);
+
+  if (
+    !Number.isSafeInteger(parsedPage) ||
+    !Number.isSafeInteger(parsedLimit)
+  ) {
+    return {
+      error: "page and limit are too large",
+    };
+  }
+
+  if (parsedLimit > 50) {
+    return {
+      error: "limit cannot exceed 50",
+    };
+  }
+
+  return {
+    page: parsedPage,
+    limit: parsedLimit,
+  };
+};
+
+export const createTicket=async(req,res)=>{
+const {subject , description, category, bookId}=req.body;
+const userId=req.user.id;
+ if(typeof subject !== "string" ||
+      !subject.trim() ||
+      typeof description !== "string" ||
+      !description.trim()){
+    return sendError(res,400,"Subject and description are required");
+ }
+  const validCategories = [
+      "ROYALTY_PAYMENTS",
+      "ISBN_METADATA",
+      "PRINTING_QUALITY",
+      "DISTRIBUTION_AVAILABILITY",
+      "BOOK_STATUS_PRODUCTION",
+      "GENERAL_INQUIRY",
+    ];
+
+    if (!validCategories.includes(category)) {
+      return sendError(res, 400, "Invalid ticket category");
+    }
+
+     if (
+      bookId !== undefined &&
+      (typeof bookId !== "string" || !bookId.trim())
+    ) {
+      return sendError(res, 400, "Invalid bookId");
+    }
+ try {
+    const author=await prisma.author.findUnique({
+        where:{userId},
+         select: { id: true },
+    })
+    if(!author){
+        return sendError(res,404,"Author profile not found")
+    }
+    if(bookId){
+        const book=await prisma.book.findUnique({
+            where:{id:bookId,
+                authorId:author.id
+            },
+            select: { id: true },
+        })
+        if(!book){
+            return sendError(res,400,"Invalid Book selection");
+        }
+    }
+
+    const ticket=await prisma.ticket.create({
+        data: {
+        subject: subject.trim(),
+        description: description.trim(),
+        category,
+        authorId: author.id,
+        bookId: bookId || null,
+      },
+      select: {
+        id: true,
+        ticketNumber: true,
+        subject: true,
+        description: true,
+        category: true,
+        priority: true,
+        status: true,
+        createdAt: true,
+      },
+    })
+    return res.status(201).json({
+        success:true,
+        message:"ticket genrated successfully",
+        ticket
+    })
+ } catch (error) {
+    console.error("cretae ticket",error)
+    return sendError(res,500,"Internal server error");
+ }
+}
+export const getMyTickets=async(req,res)=>{
+const userId=req.user.id;
+try {
+    const author=await prisma.author.findUnique({
+        where:{userId},
+        select:{
+            id:true
+        }
+    })
+    if(!author){
+        return sendError(res,404,"Author profile not found")
+    }
+
+const pagination = parsePagination(req.query);
+
+if (pagination.error) {
+  return res.status(400).json({
+    success: false,
+    message: pagination.error,
+  });
+}
+
+const { page, limit } = pagination;
+const skip = (page - 1) * limit;
+
+const tickets = await prisma.ticket.findMany({
+  where: {
+    authorId: author.id,
+  },
+  orderBy: [
+    { updatedAt: "desc" },
+    { id: "desc" },
+  ],
+  skip,
+  take: limit,
+});
+const totalTickets = await prisma.ticket.count({
+  where: {
+    authorId: author.id,
+  },
+});
+return res.status(200).json({
+  success: true,
+  data: tickets,
+  pagination: {
+    page,
+    limit,
+    totalTickets,
+    totalPages: Math.ceil(totalTickets / limit),
+    hasNextPage: skip + tickets.length < totalTickets,
+    hasPreviousPage: page > 1,
+  },
+});
+} catch (error) {
+    console.error("getMyticket error",error)
+    return sendError(res,500,"internal server error");
+}
+}
+
+export const getMyTicketById=async(req,res)=>{
+  const {ticketId}= req.params;
+  const userId=req.user.id;
+  try {
+    const author=await prisma.author.findUnique({
+        where:{userId},
+        select:{
+            id:true
+        }
+    })
+    if(!author){
+        return sendError(res,404,"Author not found")
+    }
+   const ticket = await prisma.ticket.findFirst({
+  where: {
+    id: ticketId,
+    authorId: author.id,
+  },
+  select: {
+    id: true,
+    ticketNumber: true,
+    subject: true,
+    description: true,
+    category: true,
+    priority: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+    firstResponseAt: true,
+    resolvedAt: true,
+
+    book: {
+      select: {
+        id: true,
+        title: true,
+        isbn: true,
+      },
+    },
+
+    attachments: {
+      select: {
+        id: true,
+        fileName: true,
+        fileUrl: true,
+        mimeType: true,
+        sizeBytes: true,
+        createdAt: true,
+      },
+    },
+
+    messages: {
+      where: {
+        type: "RESPONSE",
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+      select: {
+        id: true,
+        body: true,
+        type: true,
+        createdAt: true,
+        sender: {
+          select: {
+            name: true,
+            role: true,
+          },
+        },
+      },
+    },
+  },
+});
+
+if (!ticket) {
+  return res.status(404).json({
+    success: false,
+    message: "Ticket not found",
+  });
+}
+
+return res.status(200).json({
+    success:true,
+    message:"Ticket found successfully",
+    ticket
+})
+  } catch (error) {
+    console.error("getTicketById error",error);
+    return sendError(res,500,"Internal server error");
+  }  
+}
+export const getTicketConversation=async(req,res)=>{
+    const {ticketId}=req.params;
+    const userId=req.user.id;
+    
+    if (!ticketId) {
+      return sendError(res, 400, "Ticket ID is required");
+    }
+    try {
+        const author=await prisma.author.findUnique({
+            where:{userId},
+            select:{id:true}
+        })
+        if(!author){
+            return sendError(res,404,"Author profile not found")
+        }
+        const ticket=await prisma.ticket.findFirst({
+            where:{
+                id:ticketId,
+                authorId:author.id
+            },
+            select:{i:true}
+        })
+        if(!ticket){
+            return sendError(res,404,"Ticket not found")
+        }
+          const messages = await prisma.ticketMessage.findMany({
+      where: {
+        ticketId: ticket.id,
+        type: "RESPONSE",
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+      select: {
+        id: true,
+        body: true,
+        type: true,
+        createdAt: true,
+        sender: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    return res.status(200).json({
+        success:true,
+        messages:"Message feached successfully",
+        data:messages
+    })
+    } catch (error) {
+        console.error("get Ticket converstation error",error);
+        sendError(res,500,"Internal server error");
+    }
+}
+
+export const addTicketMessage=async(req,res)=>{
+    const {ticketId}=req.params;
+    const userId=req.user.id;
+    const {body}=req.body?? {};
+    const maxLength=5000;
+
+    try {
+        
+      // 1. Validate ticket ID
+    if (!ticketId || typeof ticketId !== "string") {
+      return sendError(res, 400, "Ticket ID is required");
+    }
+
+    // 2. Validate message
+    if (typeof body !== "string" || !body.trim()) {
+      return sendError(res, 400, "Message cannot be empty");
+    }
+
+    const trimmedBody = body.trim();
+
+    if (trimmedBody.length > maxLength) {
+      return sendError(res, 400, "Message cannot exceed 5000 characters");
+    }
+       const author=await prisma.author.findUnique({
+        where:{userId},
+        select:{id:true}
+       }) 
+       if(!author){
+        return sendError(res,404,"Author profile not found")
+       }
+       const ticket=await prisma.ticket.findFirst({
+        where:{
+            id:ticketId,
+            authorId:author.id
+        },
+        select:{id:true,status:true}
+       })
+       if(!ticket){
+        return sendError(res,404,"Ticket not found")
+       }
+       if(ticket.status==="CLOSED"){
+        return sendError(res,409,"Ticket si already colsed");
+       }
+     
+const [message] = await prisma.$transaction([
+  prisma.ticketMessage.create({
+    data: {
+      ticketId: ticket.id,
+      senderId: userId,
+      body: trimmedBody,
+      type: "RESPONSE",
+    },
+    select: {
+      id: true,
+      body: true,
+      type: true,
+      createdAt: true,
+      sender: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  }),
+
+prisma.ticket.update({
+  where: {
+    id: ticket.id,
+  },
+  data: {
+    status: ticket.status,
+  },
+})
+]);
+     return res.status(201).json({
+        success:true,
+        message:"message created successfully",
+        data:message
+     })
+
+    } catch (error) {
+        console.error("ad ticket message error",error);
+        return sendError(res,500,"Internal server error");
+    }
+}
