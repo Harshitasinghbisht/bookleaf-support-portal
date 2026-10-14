@@ -1,5 +1,5 @@
 import { prisma } from "../config/prisma.js";
-import { auth } from "../middleware/authenticate.middleware.js";
+
 
 const sendError = (res, status, message) =>
   res.status(status).json({
@@ -397,7 +397,7 @@ prisma.ticket.update({
     id: ticket.id,
   },
   data: {
-    status: ticket.status,
+    updatedAt: new Date(),                       
   },
 })
 ]);

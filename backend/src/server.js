@@ -8,6 +8,7 @@ import { prisma } from "./config/prisma.js";
 import userRouter from "./routes/auth.routes.js";
 import bookRouter from "./routes/book.routes.js";
 import ticketRouter from "./routes/ticket.routes.js";
+import adminTicketRouter from "./routes/adminTicket.routes.js";
 
 
 dotenv.config();
@@ -28,6 +29,7 @@ app.use(cookieParser());
 app.use("/api/v1/auth",userRouter);
 app.use("/api/v1/books",bookRouter);
 app.use("/api/v1/tickets",ticketRouter);
+app.use("/api/v1/admin",adminTicketRouter);
 
 
 app.use((req, res) => {
