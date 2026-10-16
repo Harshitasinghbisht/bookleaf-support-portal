@@ -323,14 +323,29 @@ Add deployment automation, structured logging, monitoring, health checks, rate l
 ### 7. Improved Support Experience
 
 Introduce ticket search, filtering, pagination, priorities, attachments, and configurable service-level targets where appropriate.
-
 ## Submission Notes
 
-- Source code: [Public GitHub repository]([<YOUR_PUBLIC_GITHUB_REPOSITORY_URL>](https://github.com/Harshitasinghbisht/bookleaf-support-portal/))
-- Setup instructions: Provided in this README.
-- Assumptions and design decisions: Documented above.
-- Testing: Include the checks actually executed and their results.
-- Future enhancements: Listed separately from implemented functionality.
+- **Source Code:** [BookLeaf Support Portal](https://github.com/Harshitasinghbisht/bookleaf-support-portal)
+- **Setup Instructions:** See the installation, environment configuration, database setup, and run commands documented in this README.
+- **Assumptions and Design Decisions:** Documented in the relevant sections above.
+- **Testing:** Manual testing was performed for the scenarios listed below. Only checks actually executed should be marked as completed.
+- **Future Enhancements:** Potential improvements are listed separately and are not presented as implemented features.
 
-This project was developed as part of a full-stack technical assignment, with emphasis on practical application development, role-based access control, data ownership, and an integrated support workflow.
+### Testing Performed
+
+Record the results of the checks you actually ran:
+
+| Test Scenario | Result |
+|---|---|
+| Login with valid credentials | [Pass/Not tested] |
+| Login with invalid credentials | [Pass/Not tested] |
+| Access protected routes without authentication | [Pass/Not tested] |
+| Verify admin-only route restrictions | [Pass/Not tested] |
+| Verify author data isolation | [Pass/Not tested] |
+| Create and view support tickets | [Pass/Not tested] |
+| Verify ticket status updates | [Pass/Not tested] |
+| Verify AI-generated response drafts | [Pass/Not tested] |
+| Verify real-time ticket functionality | [Pass/Not tested] |
+
+This project was developed as part of a full-stack technical assignment. It focuses on authentication, role-based access control, author data isolation, support ticket management, and integration of relevant backend and frontend functionality.
 
