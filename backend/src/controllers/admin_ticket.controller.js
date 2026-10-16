@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma.js";
 import { draftTicketResponse } from "../services/aiService.js";
+import { getIO } from "../socket.js";
 
   const parsePagination = (query) => {
   const { page = "1", limit = "10" } = query;
@@ -108,18 +109,45 @@ if (priority) {
   where.priority = priority;
 }
 
-const tickets = await prisma.ticket.findMany({
-  where,
-  orderBy: {
-    createdAt: "desc",
-  },
-  skip,
-  take: limit,
-  
-});
-const totalTickets = await prisma.ticket.count({
-  where,
-});
+
+const [tickets, totalTickets] = await Promise.all([
+  prisma.ticket.findMany({
+    where,
+    orderBy: [
+  { createdAt: "desc" },
+  { id: "desc" },
+],
+    skip,
+    take: limit,
+    select: {
+      id: true,
+      ticketNumber: true,
+      subject: true,
+      status: true,
+      category: true,
+      priority: true,
+      createdAt: true,
+      updatedAt: true,
+      assignedToId: true,
+      author: {
+        select: {
+          authorCode: true,
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+  }),
+
+  prisma.ticket.count({
+    where,
+  }),
+]);
+
    res.status(200).json({
     success:true,
     message:"Ticket retrived sccessfully",
@@ -162,6 +190,20 @@ try {
         },
       },
     },
+     aiDrafts: {
+       orderBy: {
+         createdAt: "desc",
+       },
+       take: 1,
+       select: {
+         id: true,
+         ticketId: true,
+         content: true,
+         model: true,
+         createdAt: true,
+       },
+     },
+
     messages: {
       orderBy: { createdAt: "asc" },
       select: {
@@ -271,6 +313,13 @@ const data = {};
         data.priorityOverridden = true;
       }
     }
+    if (existingTicket.status === "CLOSED" && status !== "CLOSED") {
+  return sendError(
+    res,
+    409,
+    "Closed tickets cannot be modified."
+  );
+}
   const updatedTicket = await prisma.ticket.update({
       where: { id: ticketId },
       data,
@@ -444,6 +493,26 @@ const transactionOperations = [
 
 const [message] = await prisma.$transaction(transactionOperations);
 
+const io = getIO();
+
+const eventPayload = {
+  ticketId: ticket.id,
+  message,
+};
+
+if (type === "RESPONSE") {
+  io.to(`ticket:${ticket.id}`).emit(
+    "message:created",
+    eventPayload
+  );
+} else if (type === "INTERNAL_NOTE") {
+  io.to(`ticket-admin:${ticket.id}`).emit(
+    "message:created",
+    eventPayload
+  );
+}
+
+
 return res.status(201).json({
   success: true,
   message: "Message created successfully",
@@ -525,17 +594,19 @@ export const generateAdminTicketDraft=async(req,res)=>{
     console.error("Generate admin ticket draft error:", error);
 
     try {
-      await prisma.aiCall.create({
-        data: {
-          ticketId,
-          kind: "DRAFT_RESPONSE",
-          model: "mock-development",
-          latencyMs: Date.now() - startTime,
-          success: false,
-          errorMessage: String(error.message || "Draft generation failed")
-            .slice(0, 500),
-        },
-      });
+     await prisma.aiCall.create({
+  data: {
+    ticketId,
+    kind: "DRAFT_RESPONSE",
+    mode: "real-ai",
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    latencyMs: Date.now() - startTime,
+    success: false,
+    errorMessage: String(
+      error?.message || "Draft generation failed"
+    ).slice(0, 500),
+  },
+});
     } catch (loggingError) {
       console.error("Failed to log AI draft error:", loggingError);
     }

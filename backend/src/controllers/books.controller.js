@@ -7,17 +7,21 @@ const sendError = (res, status, message) =>
   });
 
 export const getMyBooks=async(req,res)=>{
+  const controllerStartedAt = performance.now();
 const userId=req.user.id;
 try {
+  
     const author =await prisma.author.findUnique({
         where:{userId},
           select: {
         id: true,
       },
     })
+
     if(!author ){
         return sendError(res,404,"Author profile not found")
     }
+    console.time("books-db-query")
    const books=await prisma.book.findMany({
     where:{
         authorId:author.id,
@@ -36,6 +40,7 @@ try {
         royaltyPending: true,
     }
    })
+   console.timeEnd("books-db-query");
    return res.status(200).json({
     success:true,
     message:"Books retrieved  successfully",
@@ -46,7 +51,11 @@ try {
      console.error("get all getmybook",error)
      sendError(res,500,"internal server error")
 }
-
+finally {
+  console.log(
+    `books-controller-total: ${(performance.now() - controllerStartedAt).toFixed(1)}ms`
+  );
+}
 }
 
 export const getMyBookById=async(req,res)=>{
@@ -54,7 +63,7 @@ const {bookId}=req.params;
 const userId=req.user.id;
 
 if(!bookId){
-    sendError(res,400,"bookId is required");
+    return sendError(res,400,"bookId is required");
 }
 try {
      const author = await prisma.author.findUnique({

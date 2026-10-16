@@ -1,6 +1,6 @@
 import { prisma } from "../config/prisma.js";
 import { classifyTicket } from "../services/aiService.js";
-
+import { getIO } from "../socket.js";
 
 const sendError = (res, status, message) =>
   res.status(status).json({
@@ -229,7 +229,22 @@ export const createTicket = async (req, res) => {
         // Do not turn this into a failed ticket-creation response.
       }
     }
+   // Notify connected clients about the new ticket.
+try {
+  const io = getIO();
 
+  // Refresh the admin ticket queue.
+  io.to("admins").emit("admin:tickets:updated", {
+    ticketId: ticket.id,
+  });
+
+  // Refresh this author's ticket list.
+  io.to(`author:${userId}`).emit("author:tickets:updated", {
+    ticketId: ticket.id,
+  });
+} catch (socketError) {
+  console.error("Ticket notification failed:", socketError.message);
+}
     return res.status(201).json({
       success: true,
       message: "Ticket generated successfully",
@@ -238,8 +253,8 @@ export const createTicket = async (req, res) => {
   } catch (error) {
     console.error("Create ticket error:", error);
     return sendError(res, 500, "Internal server error");
-  }
-};
+  }};
+
 
 export const getMyTickets=async(req,res)=>{
 const userId=req.user.id;
@@ -282,6 +297,17 @@ const totalTickets = await prisma.ticket.count({
     authorId: author.id,
   },
 });
+const [openCount, inProgressCount, resolvedCount] = await Promise.all([
+  prisma.ticket.count({
+    where: { authorId: author.id, status: "OPEN" },
+  }),
+  prisma.ticket.count({
+    where: { authorId: author.id, status: "IN_PROGRESS" },
+  }),
+  prisma.ticket.count({
+    where: { authorId: author.id, status: "RESOLVED" },
+  }),
+]);
 return res.status(200).json({
   success: true,
   data: tickets,
@@ -292,6 +318,12 @@ return res.status(200).json({
     totalPages: Math.ceil(totalTickets / limit),
     hasNextPage: skip + tickets.length < totalTickets,
     hasPreviousPage: page > 1,
+  },
+   stats: {
+    total: totalTickets,
+    open: openCount,
+    inProgress: inProgressCount,
+    resolved: resolvedCount,
   },
 });
 } catch (error) {

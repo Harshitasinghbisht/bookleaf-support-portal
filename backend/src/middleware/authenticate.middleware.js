@@ -12,6 +12,7 @@ export  const auth=async(req,res,next)=>{
           })
       }
        const decoded=jwt.verify(token,process.env.JWT_SECRET);
+      
       const user=await prisma.user.findUnique({
         where:{id:decoded.id},
         select: {
@@ -21,6 +22,7 @@ export  const auth=async(req,res,next)=>{
             role:true
     }
       })
+     
    if(!user){
           return res.status(401).json({
               success:false,

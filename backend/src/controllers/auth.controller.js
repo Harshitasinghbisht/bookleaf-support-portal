@@ -10,8 +10,7 @@ const sendError = (res, status, message) =>
 
 export const login=async(req,res)=>{
     const email=req.body.email?.trim();
-    const password=req.body.passwordHash?.trim();
-
+   const password = req.body.password;
 if(!email  || !password){
     return sendError(res, 400, "All field are required");
 }

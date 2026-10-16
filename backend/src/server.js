@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { prisma } from "./config/prisma.js";
+import { createServer } from "node:http";
+import { initializeSocket } from "../src/socket.js";
 
 //router are here
 import userRouter from "./routes/auth.routes.js";
@@ -18,7 +20,7 @@ const app=express();
 
 const port=process.env.PORT || 4000;
 app.use(cors({
-    origin:'https://localhost:5173',
+    origin:process.env.CLIENT_URL,
     credentials:true,
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PUT', 'PATCH'],
     allowedHeaders:['Content-Type','Authorization']
@@ -44,17 +46,24 @@ app.use((req, res) => {
     });
 });
 
-const startServer=async()=>{
-    try {
-        await prisma.$connect();
-        console.log("Connected to NEON Postgres");
-        app.listen(port,()=>{
-        console.log(`app listning to port http://localhost:${port}`);
 
-})
-    } catch (error) {
-        console.error("Failed to connect to Database",error);
-        process.exit(1);
-    }
+const startServer = async () => {
+  try {
+    await prisma.$connect();
+    console.log("Connected to NEON Postgres");
+
+    const httpServer = createServer(app);
+
+    initializeSocket(httpServer);
+
+    httpServer.listen(port, () => {
+      console.log(`App listening on http://localhost:${port}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
 };
+
 startServer();
+
