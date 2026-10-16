@@ -8,9 +8,6 @@ const adapter = new PrismaPg({
 
 export const prisma = new PrismaClient({
   adapter,
-  log: [{ emit: "event", level: "query" }],
 });
 
-prisma.$on("query", (event) => {
-  console.log(`[DB] ${event.duration}ms | ${event.query}`);
-});
+

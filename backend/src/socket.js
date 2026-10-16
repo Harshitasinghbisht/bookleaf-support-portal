@@ -53,7 +53,6 @@ export function initializeSocket(httpServer) {
 
       next();
     } catch (error) {
-      console.error("Socket authentication failed:", error.message);
       next(new Error("Invalid or expired token"));
     }
   });
@@ -62,7 +61,6 @@ export function initializeSocket(httpServer) {
 io.on("connection", (socket) => {
   const user = socket.data.user;
 
-  console.log(`Authenticated socket connected: ${user.id}`);
 
   // Admins can receive admin-only real-time events.
   
@@ -133,7 +131,7 @@ if (user.role === "ADMIN") {
   });
 
   socket.on("disconnect", () => {
-    console.log(`Socket disconnected: ${socket.id}`);
+    console.log(`Socket disconnected`);
   });
 });
 
