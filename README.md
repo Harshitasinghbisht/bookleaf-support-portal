@@ -221,3 +221,10 @@ The SQL assumes that the Prisma model maps to the PostgreSQL table `"User"` and 
 This project was developed as a full-stack assignment to demonstrate frontend and backend integration, database modelling, authentication, authorization, data isolation, and the use of a supplied dataset.
 
 For evaluation, use the configured test accounts and the provided sample data. Keep environment files and production credentials out of the repository.
+
+## API Documentation
+
+The API endpoints, request parameters, authentication requirements, and example responses are documented in Postman.
+
+[View Postman API Documentation](https://documenter.getpostman.com/view/50846309/2sBYHSwzsX)
+
