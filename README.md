@@ -1,10 +1,4 @@
-﻿# BookLeaf — Author & Publishing Support Portal
-
-A full-stack web application designed to help authors track their books and publishing progress, monitor sales and royalties, and communicate with the publishing support team through a ticket-based workflow.
-
-The application provides separate experiences for authors and administrators, with role-based access control, protected resources, and AI-assisted support operations.
-
-## Table of Contents
+﻿## Table of Contents
 
 - [Overview](#overview)
 - [Key Features](#key-features)
@@ -14,219 +8,68 @@ The application provides separate experiences for authors and administrators, wi
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
 - [Database Setup](#database-setup)
+- [Database Seeding and Test Accounts](#database-seeding-and-test-accounts)
 - [Running the Application](#running-the-application)
 - [Testing](#testing)
 - [Assumptions and Design Decisions](#assumptions-and-design-decisions)
 - [Known Limitations](#known-limitations)
 - [Future Enhancements](#future-enhancements)
+- [Submission Notes](#submission-notes)
 
-## Overview
+## Database Seeding and Test Accounts
 
-BookLeaf is a publishing support portal that connects authors with the administrative team responsible for handling their queries.
+The project includes a seed script that loads the assignment's supplied sample JSON dataset into the PostgreSQL database using Prisma.
 
-Authors can access their own book information, review relevant publishing and royalty data, and raise support tickets. Administrators can manage incoming tickets, review author-related information, update ticket statuses, and prepare responses with AI-assisted functionality.
+### Seeding Behavior
 
-The application focuses on three important areas:
+- Creates or updates user accounts using their email addresses.
+- Assigns seeded users the `AUTHOR` role and marks them as active.
+- Creates or updates author profiles and their associated book records.
+- Maps publishing statuses, print partners, and sales platforms from the supplied dataset to the corresponding database enum values.
+- Uses Prisma upserts to create missing records or update existing records based on their unique identifiers.
+- Executes the seeding operations inside a database transaction.
 
-1. **Role-based access control:** Authors and administrators have different permissions and workflows.
-2. **Data isolation:** Authors should only be able to access their own authorized resources.
-3. **Support workflow:** Tickets can be managed through a structured process, with AI assistance to help streamline support operations.
+### Seeded Account Password
 
-## Key Features
+The seed script uses the `SEED_AUTHOR_PASSWORD` environment variable as the password for seeded author accounts. If this variable is not configured, the script falls back to `ChangeMe123!`.
 
-### 1. Authentication and Authorization
+The fallback is intended only for local development. Set a suitable value through your local environment before running the seed script. Never use this fallback password in a production environment.
 
-- Login functionality with credential validation.
-- Protected frontend routes for authenticated users.
-- Role-based access control for `AUTHOR` and `ADMIN` roles.
-- Server-side authorization checks for restricted operations.
-- Ownership-based access restrictions for author resources.
+### Admin Test Account
 
-### 2. Author Dashboard
+The supplied sample dataset does not include a dedicated admin account. To test admin-specific functionality, the role of one existing test user was temporarily changed from `AUTHOR` to `ADMIN` directly in the database.
 
-- View books associated with the authenticated author.
-- Review book publication statuses.
-- Display available sales and royalty information.
-- Access the support ticket workflow.
-- Create support tickets for publishing-related queries.
+This allowed testing of administrative ticket management and role-based access restrictions without changing the supplied sample dataset.
 
-### 3. Support Ticket Management
+**Important:** The seed script assigns seeded users the `AUTHOR` role. Running it again will reset the role of seeded users to `AUTHOR`. Therefore, the admin test account must be configured separately after seeding if admin testing is required.
 
-- Create and view support tickets.
-- Track ticket status and related information.
-- Allow administrators to manage tickets.
-- Support ticket replies and internal administrative notes where implemented.
-- Validate incoming requests and handle invalid or unauthorized operations.
-
-### 4. Admin Workflow
-
-- Access administrative ticket management functionality.
-- Review and manage tickets across authors.
-- Update ticket status and other supported ticket fields.
-- Organize support operations through a centralized workflow.
-
-### 5. AI-Assisted Support
-
-- Generate suggested ticket classifications.
-- Generate draft responses to author queries.
-- Keep generated responses available for review before they are sent.
-- Record relevant AI-processing information where implemented.
-
-AI-generated content is intended to assist administrators, not replace human review. When a template-based fallback is used instead of a live AI model, the application should identify that behavior accurately.
-
-### 6. Real-Time Functionality
-
-- Socket.IO integration for supported real-time events.
-- Real-time communication between connected clients for implemented workflows.
-- Server-side event handling and client updates.
-
-### 7. Data Persistence
-
-- PostgreSQL database for application data.
-- Prisma ORM for database access and schema management.
-- Seed data based on the assignment's supplied sample dataset.
-
-## Technology Stack
-
-| Layer | Technologies |
-|---|---|
-| Frontend | React, Vite, Tailwind CSS |
-| Backend | Node.js, Express.js |
-| Database | PostgreSQL |
-| ORM | Prisma |
-| Authentication | Application authentication middleware and role-based authorization |
-| Real-time communication | Socket.IO |
-| AI assistance | AI-assisted classification and response drafting, with a template fallback where configured |
-| API testing | Postman or equivalent HTTP testing tools |
-| Version control | Git and GitHub |
-
-## Application Architecture
-
-The application follows a client-server architecture.
-
-**Frontend:** Handles the user interface, authentication state, protected navigation, forms, dashboard views, ticket management, and API communication.
-
-**Backend:** Exposes API endpoints, validates incoming requests, authenticates users, enforces authorization rules, and coordinates business logic.
-
-**Database:** Stores application records, including users, books, tickets, and related entities according to the Prisma schema.
-
-**Real-time layer:** Socket.IO supports the real-time events implemented by the application.
-
-**AI service layer:** Generates suggested classifications or draft responses through the configured provider or fallback implementation.
-
-The backend remains responsible for enforcing permissions. Hiding a button or restricting a frontend route alone is not considered sufficient authorization.
-
-## Prerequisites
-
-Before running the application, install or arrange the following:
-
-- Node.js and npm.
-- Access to a PostgreSQL database.
-- Git.
-- A modern web browser.
-- An AI provider API key only if the live AI integration requires one.
-
-Check the project's Node.js requirements and package configuration before selecting a Node.js version.
-
-## Getting Started
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/Harshitasinghbisht/bookleaf-support-portal/
-cd bookleaf_assignment
-```
-
-### 2. Install dependencies
-
-Install dependencies separately for the backend and frontend.
-
-```bash
-cd backend
-npm install
-```
-
-Then, from the repository root or the actual frontend directory:
-
-```bash
-cd frontend
-npm install
-```
-
-Adjust directory names to match the repository structure.
-
-### 3. Configure environment variables
-
-Create the required `.env` files using the provided `.env.example` files, if available.
-
-Configure the database connection, authentication secret, frontend API URL, and any additional settings required by the project.
-
-Do not commit actual secrets, database passwords, or private API keys.
-
-### 4. Prepare the database
-
-Ensure PostgreSQL is accessible and the configured database exists.
-
-Generate the Prisma client and apply the project's database schema or migrations using the commands supported by the installed Prisma version and project configuration.
-
-For example, a project using Prisma migrations may require:
-
-```bash
-npx prisma generate
-npx prisma migrate deploy
-```
-
-Run these commands from the backend directory if that is where the Prisma configuration is located. Use the project's actual migration and seeding workflow.
-
-If the repository provides a seed command, run it to load the supplied assignment data.
-
-### 5. Start the backend
-
-From the backend directory, use the development script defined in `package.json`.
-
-```bash
-npm run dev
-```
-
-### 6. Start the frontend
-
-In a separate terminal, navigate to the frontend directory and run:
-
-```bash
-npm run dev
-```
-
-Vite will display the local development URL in the terminal. Open that URL in your browser.
-
-**Important:** The exact directory names, scripts, environment variable names, and migration commands must match the committed project. Refer to the actual `package.json`, Prisma configuration, and environment example files.
+No real production user data or credentials should be used for this testing setup.
 
 ## Environment Variables
 
-The following table describes typical configuration values. Use the exact names expected by the application in the committed `.env.example` files.
+Configure the environment variables required by the backend and frontend using local `.env` files. Use `.env.example` files to document the required variable names without exposing credentials.
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `JWT_SECRET` | Secret used by JWT-based authentication, if applicable |
-| `PORT` | Backend server port |
-| `CLIENT_URL` | Frontend origin used for CORS or related configuration |
-| `VITE_API_URL` | Backend API base URL used by the frontend, if configured |
-| AI provider key | Credentials for the configured AI provider, if required |
+| `DATABASE_URL` | PostgreSQL connection string used by Prisma |
+| `JWT_SECRET` | Secret used to verify and sign JWTs, if configured in the authentication implementation |
+| `CLIENT_URL` | Frontend origin used for CORS and Socket.IO configuration |
+| `PORT` | Backend listening port, if configurable |
+| `SEED_AUTHOR_PASSWORD` | Optional password used for accounts created by the seed script |
+| `VITE_API_URL` | Frontend API base URL, if used by the frontend |
+| AI provider API key | Required only if the configured AI implementation uses an external provider |
 
-Never publish production credentials or real user data in the repository.
+The exact variable names and requirements must match the committed application code.
 
-## Database Setup
+Do not commit `.env` files containing actual credentials, database passwords, JWT secrets, or private API keys. If a development fallback password exists in the seed script, replace it with an environment-provided value when running the script.
 
-The database schema is managed using Prisma and PostgreSQL.
+10. **Admin test-account setup:** The provided dataset does not contain a dedicated admin account. An existing test user's role was temporarily changed to `ADMIN` directly in the database to verify admin-only functionality. The seed script itself assigns seeded users the `AUTHOR` role.
 
-The setup process should include:
+11. **Repeatable seeding:** The seed script uses upserts for users, author profiles, and books. Existing records may be updated when seeding is run again. In particular, seeded user roles are reset to `AUTHOR`.
 
-1. Configure a valid PostgreSQL connection string.
-2. Generate the Prisma client.
-3. Apply committed migrations or the documented schema initialization command.
-4. Load the provided sample dataset using the project's seed script, if available.
-5. Verify that the backend can connect to the database.
+12. **Development-only credentials:** The seed script supports `SEED_AUTHOR_PASSWORD`. If the environment variable is absent, a fallback password is used for local development only. This fallback should not be used in production.
 
+<<<<<<< HEAD
 Use the committed schema and migration files as the source of truth for the actual data model.
 
 ## Testing
@@ -348,4 +191,32 @@ Record the results of the checks you actually ran:
 | Verify real-time ticket functionality | [Pass/Not tested] |
 
 This project was developed as part of a full-stack technical assignment. It focuses on authentication, role-based access control, author data isolation, support ticket management, and integration of relevant backend and frontend functionality.
+=======
+13. **Sample data preservation:** The supplied sample dataset is used for initial demonstration and testing. The seed script maps its publishing statuses, print partners, and platforms to the application's supported database values. Unknown mappings cause the seed process to fail rather than silently assigning an unsupported value.
 
+## Submission Notes
+
+- **Source Code:** [BookLeaf Support Portal](https://github.com/Harshitasinghbisht/bookleaf-support-portal)
+- **Setup Instructions:** Documented in this README. Follow the environment configuration, database migration, and seeding instructions before starting the application.
+- **Assumptions and Design Decisions:** Documented above, including the supplied sample dataset and the separate admin test-account setup.
+- **Testing:** The table below records the test scenarios and their actual results. Only scenarios that were executed and verified are marked as passed.
+- **Future Enhancements:** Listed separately and not presented as implemented functionality.
+
+### Testing Performed
+>>>>>>> 96da89c (feat: final cleanup)
+
+Update each result based on the tests actually executed.
+
+| Test Scenario | Result |
+|---|---|
+| Login with valid credentials | [Record result] |
+| Login with invalid credentials | [Record result] |
+| Protected endpoint without authentication | [Record result] |
+| Admin-only route restriction | [Record result] |
+| Author data isolation | [Record result] |
+| Support ticket creation and viewing | [Record result] |
+| Ticket status updates | [Record result] |
+| AI-assisted response drafting | [Record result] |
+| Real-time ticket functionality | [Record result] |
+
+This project was developed as part of a full-stack technical assignment. It focuses on authentication, role-based access control, author data ownership, support ticket management, and the integration of frontend and backend workflows.
