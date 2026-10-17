@@ -127,7 +127,7 @@ useEffect(() => {
         {/* Public routes */}
        <Route path="/" element={<HomeRedirect />} />
        <Route path="*" element={<NotFoundPage />} />
-
+       <Route path="/login" element={<LoginPage />} />
         {/* Author-only routes */}
         
         <Route element={<ProtectedRoute allowedRoles={["AUTHOR"]} />}>
