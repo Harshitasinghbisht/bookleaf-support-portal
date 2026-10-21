@@ -7,7 +7,11 @@ A full-stack application for managing books, publication status, sales, royaltie
 **Frontend**
 - React
 - JavaScript
-- [Add the UI libraries used in the project]
+- Redux
+- Axios
+- lucide react
+- socket.io.client
+- Tailwind
 
 **Backend**
 - Node.js
